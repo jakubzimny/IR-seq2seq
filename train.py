@@ -9,7 +9,7 @@ from model import s2s_model
 
 HIDDEN_SIZE = 512
 ERR_RATE = 0.8
-EPOCHS = 100
+EPOCHS = 75
 BATCH_SIZE = 128
 DATA_DIR = './data'
 
@@ -42,7 +42,7 @@ if __name__ == '__main__':
     model = s2s_model(HIDDEN_SIZE, len(input_charset), len(target_charset))
     print(model.summary())
 
-    log_dir = 'tb_logs/trash'
+    log_dir = 'tb_logs/v1'
     tensorboard_callback = callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
         
     train_encoder_batch = get_batch_generator(train_encoder_tokens, train_max_word_len, input_oh_encoder, BATCH_SIZE, True)
