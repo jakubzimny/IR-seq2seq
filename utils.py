@@ -4,10 +4,80 @@ import numpy as np
 
 from unidecode import unidecode
 from typing import List, Tuple
+from model import f1_score
+from onehot import OneHotEncoder
+from tensorflow.keras.models import load_model, Model
+from tensorflow.keras.layers import Input
 
 SOS = '\t'
 EOS = '*' 
 CHARSET = list('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ')
+
+def load_s2s_model(path, hidden_size, double_lstm = False):
+    model = load_model(path, custom_objects={'f1_score': f1_score})
+    if double_lstm:
+        pass
+    else:
+        encoder_inputs = model.input[0]
+        encoder_lstm1 = model.get_layer('e_lstm1')
+        encoder_lstm2 = model.get_layer('e_lstm2')
+        encoder_outputs = encoder_lstm1(encoder_inputs)
+
+        _, state_h, state_c = encoder_lstm2(encoder_outputs)
+        encoder_states = [state_h, state_c]
+        encoder_model = Model(inputs=encoder_inputs, outputs=encoder_states)
+
+        decoder_inputs = model.input[1]
+        decoder_state_input_h = Input(shape=(hidden_size,))
+        decoder_state_input_c = Input(shape=(hidden_size,))
+        decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
+        decoder_lstm = model.get_layer('d_lstm')
+        decoder_outputs, state_h, state_c = decoder_lstm(
+            decoder_inputs, initial_state=decoder_states_inputs)
+        decoder_states = [state_h, state_c]
+        decoder_softmax = model.get_layer('d_softmax')
+        decoder_outputs = decoder_softmax(decoder_outputs)
+        decoder_model = Model(inputs=[decoder_inputs] + decoder_states_inputs,
+                            outputs=[decoder_outputs] + decoder_states)
+        return encoder_model, decoder_model
+
+def decode_sequences(inputs, input_oh_encoder, target_oh_encoder, max_length, encoder, decoder, nb_of_examples, is_reversed):
+    input_tokens = []
+    indices = range(nb_of_examples)
+    for index in indices:
+        input_tokens.append(inputs[index])
+
+    input_sequences = next(get_batch_generator(tokens=input_tokens,
+                                          max_length=max_length,
+                                          oh_encoder=input_oh_encoder,
+                                          batch_size=nb_of_examples,
+                                          is_reversed=is_reversed))
+
+    states = encoder.predict(input_sequences)
+    target_sequences = np.zeros((nb_of_examples, 1, target_oh_encoder.get_charset_size()))
+    target_sequences[:, 0, target_oh_encoder.get_index_of_char(SOS)] = 1.0
+
+    decoded_tokens = ['' for _ in range(nb_of_examples)]
+    for _ in range(max_length):
+        char_probs, h, c = decoder.predict([target_sequences] + states)
+        target_sequences = np.zeros((nb_of_examples, 1, target_oh_encoder.get_charset_size()))
+        sampled_chars = []
+        for i in range(nb_of_examples):
+            next_index, next_char = target_oh_encoder.decode_one_hot(char_probs[i])
+            decoded_tokens[i] += next_char
+            sampled_chars.append(next_char)
+            target_sequences[i, 0, next_index] = 1.0
+        stop_char = set(sampled_chars)
+        if len(stop_char) == 1 and stop_char.pop() == EOS:
+            break
+        states = [h, c]
+
+    input_tokens   = [re.sub('[%s]' % EOS, '', token)
+                      for token in input_tokens]
+    decoded_tokens = [re.sub('[%s]' % EOS, '', token)
+                      for token in decoded_tokens]
+    return input_tokens,  decoded_tokens
+
 
 def load_text(data_dir: str, subfolder: str ='train') -> str:
     text = ''
@@ -84,3 +154,5 @@ def get_data_generator(encoder_iter, decoder_iter, target_iter):
         encoder_input, decoder_input = next(inputs)
         target = next(target_iter)
         yield ([encoder_input, decoder_input], target)
+
+

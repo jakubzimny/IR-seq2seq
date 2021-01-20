@@ -9,12 +9,15 @@ class OneHotEncoder:
         self._chars = sorted(set(chars))
         self._char_to_index = {}
         self._index_to_char = {}
-        self._fill_translate_dicts()
+        self._fill_translation_dicts()
 
-    def _fill_translate_dicts(self):
+    def _fill_translation_dicts(self):
         for idx, char in enumerate(self._chars):
             self._char_to_index[char] = idx
             self._index_to_char[idx] = char
+
+    def get_index_of_char(self, char):
+        return self._char_to_index[char]
 
     def get_charset_size(self) -> int:
         return len(self._chars)

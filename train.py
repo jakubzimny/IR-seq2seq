@@ -7,11 +7,12 @@ from utils import load_text, tokenize, prepare_word_tokens
 from onehot import OneHotEncoder
 from model import s2s_model
 
-HIDDEN_SIZE = 512
-ERR_RATE = 0.8
-EPOCHS = 75
-BATCH_SIZE = 128
+HIDDEN_SIZE = 512  
+ERR_RATE = 0.2  
+EPOCHS = 15
+BATCH_SIZE = 256  
 DATA_DIR = './data'
+R_DROPUT = 0.2
 
 if __name__ == '__main__':
     train_text  = load_text(DATA_DIR)
@@ -32,24 +33,24 @@ if __name__ == '__main__':
 
     input_charset = set(' '.join(train_encoder_tokens))
     target_charset = set(' '.join(train_decoder_tokens))
-    
     input_oh_encoder  = OneHotEncoder(input_charset)
     target_oh_encoder = OneHotEncoder(target_charset)
 
     train_steps = len(train_word_set) // BATCH_SIZE
     val_steps = len(val_word_set) // BATCH_SIZE
 
-    model = s2s_model(HIDDEN_SIZE, len(input_charset), len(target_charset))
+    model = s2s_model(HIDDEN_SIZE, len(input_charset), len(target_charset), R_DROPUT)
     print(model.summary())
 
-    log_dir = 'tb_logs/v1'
+    model_name = f'test-no_reverse-hs-{HIDDEN_SIZE}_err-{ERR_RATE}_bs-{BATCH_SIZE}_e-{EPOCHS}_drop-{R_DROPUT}'
+    log_dir = f'tb_logs/{model_name}'
     tensorboard_callback = callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
         
-    train_encoder_batch = get_batch_generator(train_encoder_tokens, train_max_word_len, input_oh_encoder, BATCH_SIZE, True)
+    train_encoder_batch = get_batch_generator(train_encoder_tokens, train_max_word_len, input_oh_encoder, BATCH_SIZE, False)
     train_decoder_batch = get_batch_generator(train_decoder_tokens, train_max_word_len, target_oh_encoder, BATCH_SIZE)
     train_target_batch  = get_batch_generator(train_target_tokens, train_max_word_len, target_oh_encoder, BATCH_SIZE)    
 
-    val_encoder_batch = get_batch_generator(val_encoder_tokens, val_max_word_len, input_oh_encoder, BATCH_SIZE, True)
+    val_encoder_batch = get_batch_generator(val_encoder_tokens, val_max_word_len, input_oh_encoder, BATCH_SIZE, False)
     val_decoder_batch = get_batch_generator(val_decoder_tokens, val_max_word_len, target_oh_encoder,BATCH_SIZE)
     val_target_batch  = get_batch_generator(val_target_tokens, val_max_word_len, target_oh_encoder, BATCH_SIZE)
     
@@ -63,4 +64,4 @@ if __name__ == '__main__':
               validation_steps=val_steps,
               callbacks=[tensorboard_callback])    
 
-    model.save('model.h5')
+    model.save(f'{model_name}.h5')
